@@ -87,3 +87,13 @@ Network Trash Folder
 Temporary Items
 .apdisk
 big_file.txt
+.zig-cache/
+zig-out/
+/release/
+/debug/
+/build/
+/build-*/
+/docgen_tmp/
+zig-cache/
+test.asm
+.zed/
