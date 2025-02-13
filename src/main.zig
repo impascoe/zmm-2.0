@@ -24,6 +24,30 @@ const Token = union(enum) {
     _identifier: []const u8,
 };
 
+const Program = struct {
+    functions: []Function,
+};
+
+const Function = struct {
+    function_name: []const u8,
+    function_body: Statement,
+};
+
+const Statement = union(enum) {
+    _return: Return,
+    _expression: Expression,
+};
+
+const Expression = union(enum) {
+    constant: Constant,
+    // identifier: Identifier,
+    // operation: Operation,
+};
+
+const Return = struct {
+    return_value: Expression, // for now, only constants are supported
+};
+
 pub fn main() !void {
     const args = try std.process.argsAlloc(std.heap.page_allocator);
     defer std.process.argsFree(std.heap.page_allocator, args);
@@ -81,6 +105,7 @@ pub fn main() !void {
                     try tokens.append(Token{ ._keyword = Keyword._return });
                     buffer.clearRetainingCapacity();
                 } else { // if not a keyword, then it is a identifier
+
                     index += 1;
                     // std.debug.print("\n", .{});
                     // std.debug.print("{s}\n", .{buffer.items});
@@ -89,8 +114,9 @@ pub fn main() !void {
                         index += 1;
                     }
                     index -= 1;
-                    // std.debug.print("keyword hopefully supporting underscores: {s}\n", .{buffer.items});
-                    try tokens.append(Token{ ._identifier = buffer.items });
+                    const identifier = try allocator.dupe(u8, buffer.items);
+
+                    try tokens.append(Token{ ._identifier = identifier });
                     buffer.clearRetainingCapacity();
                 }
                 buffer.clearRetainingCapacity();
@@ -124,5 +150,25 @@ pub fn main() !void {
             index += 1;
         }
     }
-    std.debug.print("{any}", .{tokens.items});
+
+    while (tokens.items.len > 0) {
+        const token = tokens.orderedRemove(0);
+        // std.debug.print("{any}\n", .{token});
+
+        switch (token) {
+            ._constant => {
+                std.debug.print("Constant: {d}\n", .{token._constant._int_constant});
+            },
+            ._identifier => {
+                std.debug.print("Identifier: {s}\n", .{token._identifier});
+                allocator.free(token._identifier);
+            },
+            ._keyword => {
+                std.debug.print("Identifier: {any}\n", .{token._keyword});
+            },
+            ._punctuation => {
+                std.debug.print("Punctuation: {any}\n", .{token._punctuation});
+            },
+        }
+    }
 }
