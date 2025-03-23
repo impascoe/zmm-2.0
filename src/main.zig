@@ -15,7 +15,12 @@ const Punctuation = enum {
     _semicolon,
 };
 
-const Constant = union(enum) { _int_constant: c_int };
+const Constant = struct { kind: enum { int_val, float_val, char_val, string_val }, value: union {
+    int_val: i32,
+    float_val: f32,
+    char_val: u8,
+    string_val: []const u8,
+} };
 
 const Token = union(enum) {
     _keyword: Keyword,
@@ -34,18 +39,36 @@ const Function = struct {
 };
 
 const Statement = union(enum) {
-    _return: Return,
-    _expression: Expression,
+    return_stmt: Return,
+    expression_stmt: Expression,
 };
 
 const Expression = union(enum) {
-    constant: Constant,
+    constant_expr: Constant,
     // identifier: Identifier,
     // operation: Operation,
 };
 
 const Return = struct {
     return_value: Expression, // for now, only constants are supported
+};
+
+const Parser = struct {
+    tokens: []Token,
+    current_token: usize,
+
+    pub fn init(tokens: []Token) Parser {
+        return Parser{ .tokens = tokens, .current_token = 0 };
+    }
+
+    fn peek(self: *Parser) ?Token {
+        if (self.current_token + 1 >= self.tokens.len) return null;
+        return self.tokens[self.current_token];
+    }
+
+    fn consume(self: *Parser) ?Token {
+        return self.tokens[self.current_token + 1];
+    }
 };
 
 pub fn main() !void {
@@ -127,7 +150,7 @@ pub fn main() !void {
                     temp_int += (line[index + 1] - '0');
                     index += 1;
                 }
-                try tokens.append(Token{ ._constant = Constant{ ._int_constant = temp_int } });
+                try tokens.append(Token{ ._constant = Constant{ .kind = .int_val, .value = .{ .int_val = temp_int } } });
                 buffer.clearRetainingCapacity();
             } else if (cur_char == ';') {
                 try tokens.append(Token{ ._punctuation = Punctuation._semicolon });
@@ -157,7 +180,7 @@ pub fn main() !void {
 
         switch (token) {
             ._constant => {
-                std.debug.print("Constant: {d}\n", .{token._constant._int_constant});
+                std.debug.print("Constant: {any}\n", .{token._constant});
             },
             ._identifier => {
                 std.debug.print("Identifier: {s}\n", .{token._identifier});
