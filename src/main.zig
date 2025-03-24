@@ -56,9 +56,10 @@ const Return = struct {
 const Parser = struct {
     tokens: []Token,
     current_token: usize,
+    allocator: std.mem.Allocator,
 
-    pub fn init(tokens: []Token) Parser {
-        return Parser{ .tokens = tokens, .current_token = 0 };
+    pub fn init(tokens: []Token, allocator: std.mem.Allocator) Parser {
+        return Parser{ .tokens = tokens, .current_token = 0, .allocator = allocator };
     }
 
     fn peek(self: *Parser) ?Token {
@@ -66,8 +67,18 @@ const Parser = struct {
         return self.tokens[self.current_token];
     }
 
-    fn consume(self: *Parser) ?Token {
+    fn consume(self: *Parser) Token {
         return self.tokens[self.current_token + 1];
+    }
+
+    fn match(self: *Parser, tag: Token) bool {
+        if (self.peek()) |token| {
+            if (std.meta.activeTag(token) == tag) {
+                self.current_token += 1;
+                return true;
+            }
+        }
+        return false;
     }
 };
 
