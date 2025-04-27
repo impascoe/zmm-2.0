@@ -46,6 +46,7 @@ pub fn main() !void {
                 }
             },
             ._identifier => |id| std.debug.print("Identifier: \"{s}\"\n", .{id}),
+            ._eof => std.debug.print("EOF\n", .{}),
         }
     }
 }
