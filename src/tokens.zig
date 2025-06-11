@@ -32,17 +32,25 @@ pub const Token = union(enum) {
 
     pub fn deinit(self: Token, allocator: std.mem.Allocator) void {
         switch (self) {
-            ._identifier => allocator.free(self._identifier),
-            ._constant => {
-                switch (self._constant.kind) {
-                    .int_val => {},
-                    .float_val => {},
-                    .char_val => {},
-                    .string_val => allocator.free(self._constant.value.string_val),
+            ._identifier => |id| {
+                // Only free if it's a valid slice
+                if (id.len > 0) {
+                    allocator.free(id);
                 }
             },
-            ._eof => {},
-            else => {},
+            ._constant => {
+                switch (self._constant.kind) {
+                    .int_val, .float_val, .char_val => {},
+                    .string_val => {
+                        // Only free string values if they're valid
+                        const str = self._constant.value.string_val;
+                        if (str.len > 0) {
+                            allocator.free(str);
+                        }
+                    },
+                }
+            },
+            ._eof, ._keyword, ._punctuation => {}, // These don't contain heap allocations
         }
     }
 };

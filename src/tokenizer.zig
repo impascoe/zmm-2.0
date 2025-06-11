@@ -1,6 +1,6 @@
 const std = @import("std");
-const tokens = @import("tokens.zig");
 
+const tokens = @import("tokens.zig");
 const Token = tokens.Token;
 const Keyword = tokens.Keyword;
 const Constant = tokens.Constant;
@@ -9,6 +9,8 @@ pub const Tokenizer = struct {
     position: usize,
     allocator: std.mem.Allocator,
     content: []const u8,
+    line: usize,
+    column: usize,
 
     pub fn init(allocator: std.mem.Allocator, file_path: []const u8) !Tokenizer {
         const file = try std.fs.cwd().openFile(file_path, .{});
@@ -23,7 +25,7 @@ pub const Tokenizer = struct {
             return error.IncompleteRead;
         }
 
-        return Tokenizer{ .position = 0, .allocator = allocator, .content = content };
+        return Tokenizer{ .position = 0, .allocator = allocator, .content = content, .line = 1, .column = 1 };
     }
 
     fn peek(self: *Tokenizer) ?u8 {
@@ -35,6 +37,15 @@ pub const Tokenizer = struct {
         if (self.position >= self.content.len) return null;
         const char = self.content[self.position];
         self.position += 1;
+
+        // Track line and column
+        if (char == '\n') {
+            self.line += 1;
+            self.column = 1;
+        } else {
+            self.column += 1;
+        }
+
         return char;
     }
 
@@ -42,11 +53,25 @@ pub const Tokenizer = struct {
         self.allocator.free(self.content);
     }
 
+    // Add this function to the Tokenizer struct
+    pub fn reportError(self: *Tokenizer) void {
+        // Calculate line and column if you're tracking them
+        // Otherwise just report position
+        std.debug.print("Invalid token character: '{c}' at line {}, column {}\n", .{ self.peek().?, self.line, self.column });
+    }
+
     pub fn tokenize(self: *Tokenizer) ![]Token {
         var buffer = std.ArrayList(u8).init(self.allocator);
         var token_list = std.ArrayList(Token).init(self.allocator);
 
         defer buffer.deinit();
+        errdefer {
+            // Clean up any tokens we've already created
+            for (token_list.items) |*token| {
+                token.deinit(self.allocator);
+            }
+            token_list.deinit();
+        }
 
         while (self.peek() != null) {
             if (std.ascii.isAlphabetic(self.peek().?)) {
@@ -57,11 +82,18 @@ pub const Tokenizer = struct {
                 if (std.mem.eql(u8, buffer.items, "int")) {
                     try token_list.append(Token{ ._keyword = Keyword._int });
                     buffer.clearRetainingCapacity();
-                    // add other keywords here
+                } else if (std.mem.eql(u8, buffer.items, "return")) {
+                    try token_list.append(Token{ ._keyword = Keyword._return });
+                    buffer.clearRetainingCapacity();
+                } else if (std.mem.eql(u8, buffer.items, "void")) {
+                    try token_list.append(Token{ ._keyword = Keyword._void });
+                    buffer.clearRetainingCapacity();
+                } else if (std.mem.eql(u8, buffer.items, "char")) {
+                    try token_list.append(Token{ ._keyword = Keyword._char });
+                    buffer.clearRetainingCapacity();
                 } else {
-                    while (self.peek() != null and (std.ascii.isAlphanumeric(self.peek().?) or self.peek() == '_')) {
-                        try buffer.append(self.consume().?);
-                    }
+                    // Here was the bug: we were trying to consume more characters after
+                    // already reading the full identifier in the previous loop
                     const identifier = try self.allocator.dupe(u8, buffer.items);
                     try token_list.append(Token{ ._identifier = identifier });
                     buffer.clearRetainingCapacity();
@@ -101,7 +133,9 @@ pub const Tokenizer = struct {
                 _ = self.consume();
                 buffer.clearRetainingCapacity();
             } else {
-                std.log.err("Invalid token {s}", .{buffer.items});
+                // For invalid tokens, log an error and stop
+                self.reportError();
+                return error.InvalidToken;
             }
         }
         self.position = 0;

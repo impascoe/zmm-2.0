@@ -1,10 +1,12 @@
 const std = @import("std");
+
+const Parser = @import("parser.zig").Parser;
 const Tokenizer = @import("tokenizer.zig").Tokenizer;
 
 pub fn main() !void {
     const args = try std.process.argsAlloc(std.heap.page_allocator);
     defer std.process.argsFree(std.heap.page_allocator, args);
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}).init;
     const allocator = gpa.allocator();
 
     defer {
@@ -19,34 +21,58 @@ pub fn main() !void {
     }
 
     const file_path = args[1];
-    var tokenizer = try Tokenizer.init(allocator, file_path);
+
+    var compilation_succeeded = true;
+
+    var tokenizer = Tokenizer.init(allocator, file_path) catch |err| {
+        std.debug.print("Error opening file: {}\n", .{err});
+        // Return success (not error) so the build succeeds
+        compilation_succeeded = false;
+        std.process.exit(1);
+        return;
+    };
+
     defer tokenizer.deinit();
 
-    const tokens = try tokenizer.tokenize();
+    const tokens = tokenizer.tokenize() catch |err| {
+        // Handle tokenization errors
+        std.debug.print("Tokenization error: {}\n", .{err});
+        // Return success (not error) so the build succeeds
+        compilation_succeeded = false;
+        std.process.exit(1);
+        return;
+    };
+
+    // We'll free tokens at the end
     defer {
-        for (tokens) |token| {
+        // Safely free the tokens
+        for (tokens) |*token| {
             token.deinit(allocator);
         }
         allocator.free(tokens);
     }
 
-    std.debug.print("Found {} tokens:\n", .{tokens.len});
-    for (tokens, 0..) |token, i| {
-        std.debug.print("Token {}: ", .{i});
-        switch (token) {
-            ._keyword => |keyword| std.debug.print("Keyword: {}\n", .{keyword}),
-            ._punctuation => |punct| std.debug.print("Punctuation: {}\n", .{punct}),
-            ._constant => |constant| {
-                std.debug.print("Constant: ", .{});
-                switch (constant.kind) {
-                    .int_val => std.debug.print("Int({})\n", .{constant.value.int_val}),
-                    .float_val => std.debug.print("Float({})\n", .{constant.value.float_val}),
-                    .char_val => std.debug.print("Char('{c}')\n", .{constant.value.char_val}),
-                    .string_val => std.debug.print("String(\"{s}\")\n", .{constant.value.string_val}),
-                }
-            },
-            ._identifier => |id| std.debug.print("Identifier: \"{s}\"\n", .{id}),
-            ._eof => std.debug.print("EOF\n", .{}),
-        }
+    var parser = Parser.init(allocator, tokens) catch |err| {
+        std.debug.print("Parser initialization error: {}\n", .{err});
+        compilation_succeeded = false;
+        std.process.exit(1);
+        return;
+    };
+
+    var program = parser.parse() catch |err| {
+        std.debug.print("Parsing error: {}\n", .{err});
+        compilation_succeeded = false;
+        std.process.exit(1);
+        return;
+    };
+
+    std.debug.print("{any}", .{program});
+
+    // Free the program after we're done with it
+    defer program.deinit(allocator);
+
+    // Exit with appropriate code if compilation failed
+    if (!compilation_succeeded) {
+        std.process.exit(1);
     }
 }
