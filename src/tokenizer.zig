@@ -57,7 +57,12 @@ pub const Tokenizer = struct {
     pub fn reportError(self: *Tokenizer) void {
         // Calculate line and column if you're tracking them
         // Otherwise just report position
-        std.debug.print("Invalid token character: '{c}' at line {}, column {}\n", .{ self.peek().?, self.line, self.column });
+        const peeked_char = self.peek();
+        if (peeked_char == null) {
+            std.debug.print("Invalid token character: <null> at line {}, column {}\n", .{ self.line, self.column });
+        } else {
+            std.debug.print("Invalid token character: '{c}' at line {}, column {}\n", .{ peeked_char.?, self.line, self.column });
+        }
     }
 
     pub fn tokenize(self: *Tokenizer) ![]Token {
