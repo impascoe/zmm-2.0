@@ -28,8 +28,7 @@ pub fn main() !void {
         std.debug.print("Error opening file: {}\n", .{err});
         // Return success (not error) so the build succeeds
         compilation_succeeded = false;
-        std.process.exit(1);
-        return;
+        return error.FileOpenError;
     };
 
     defer tokenizer.deinit();
